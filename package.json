@@ -1,40 +1,65 @@
 {
   "name": "ripple-lib",
-  "version": "0.7.36",
-  "description": "Ripple JavaScript client library",
+  "version": "0.12.5",
+  "license": "ISC",
+  "description": "A JavaScript API for interacting with Ripple in Node.js and the browser",
   "files": [
-    "src/js/*",
+    "dist/npm/*",
     "bin/*",
     "build/*",
     "test/*",
-    "Makefile",
     "Gulpfile.js"
   ],
-  "main": "src/js/ripple",
+  "main": "dist/npm/",
   "directories": {
     "test": "test"
   },
   "dependencies": {
-    "async": "~0.8.0",
-    "ws": "~0.4.31",
+    "async": "~0.9.0",
+    "babel-runtime": "^5.5.4",
+    "bignumber.js": "^2.0.3",
     "extend": "~1.2.1",
+    "https-proxy-agent": "^1.0.0",
+    "is-my-json-valid": "^2.12.0",
+    "lodash": "^3.1.0",
     "lru-cache": "~2.5.0",
-    "superagent": "^0.18.0"
+    "ripple-lib-transactionparser": "^0.3.2",
+    "ripple-wallet-generator": "^1.0.3",
+    "simple-asyncify": "^0.1.0",
+    "sjcl-extended": "ripple/sjcl-extended#1.0.3",
+    "ws": "~0.7.1"
   },
   "devDependencies": {
-    "mocha": "~1.14.0",
-    "gulp": "~3.6.2",
-    "gulp-concat": "~2.2.0",
-    "gulp-jshint": "~1.5.5",
-    "webpack": "~1.1.10",
-    "map-stream": "~0.1.0",
-    "istanbul": "~0.2.10",
-    "coveralls": "~2.10.0"
+    "assert-diff": "^1.0.1",
+    "babel": "^5.5.4",
+    "babel-core": "^5.5.4",
+    "babel-eslint": "^3.1.23",
+    "babel-loader": "^5.0.0",
+    "coveralls": "~2.10.0",
+    "eslint": "^0.24.0",
+    "eslint-plugin-flowtype": "^1.0.0",
+    "eventemitter2": "^0.4.14",
+    "flow-bin": "^0.13.1",
+    "gulp": "~3.8.10",
+    "gulp-bump": "~0.1.13",
+    "gulp-rename": "~1.2.0",
+    "gulp-uglify": "~1.1.0",
+    "istanbul": "~0.3.5",
+    "mocha": "~2.1.0",
+    "webpack": "~1.5.3",
+    "yargs": "~1.3.1"
   },
   "scripts": {
-    "pretest": "node_modules/.bin/gulp concat-sjcl",
-    "test": "./node_modules/.bin/istanbul test -x build/sjcl.js -x src/js/jsbn/* ./node_modules/.bin/_mocha -- --reporter spec test/*-test.js",
-    "coveralls": "cat ./coverage/lcov.info | ./node_modules/.bin/coveralls"
+    "build": "gulp",
+    "clean": "rm -rf dist/npm && rm -rf build/flow",
+    "typecheck": "babel --optional runtime --blacklist flow -d build/flow/ src/ && flow check",
+    "compile": "babel --optional runtime -d dist/npm/ src/ && cp -r src/api/common/schemas/ dist/npm/api/common/schemas/",
+    "compile-with-source-maps": "babel --optional runtime -s -t -d dist/npm/ src/",
+    "prepublish": "npm run clean && npm run compile",
+    "test": "istanbul test _mocha",
+    "coveralls": "cat ./coverage/lcov.info | coveralls",
+    "lint": "if ! [ -f eslintrc ]; then curl -o eslintrc 'https://raw.githubusercontent.com/ripple/javascript-style-guide/es6/eslintrc'; echo 'plugins:\n  - flowtype' >> eslintrc; fi; eslint --reset -c eslintrc src/",
+    "perf": "./scripts/perf_test.sh"
   },
   "repository": {
     "type": "git",
@@ -42,6 +67,6 @@
   },
   "readmeFilename": "README.md",
   "engines": {
-    "node": ">=0.10.0"
+    "node": ">=0.12.0"
   }
 }

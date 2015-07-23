@@ -17,7 +17,7 @@
 
 # Ignore object files.
 *.o
-build/ripple*.js
+build/
 tags
 bin/rippled
 Debug/*.*
@@ -25,6 +25,7 @@ Release/*.*
 
 # Ignore locally installed node_modules
 node_modules
+!test/node_modules
 
 # Ignore tmp directory.
 tmp
@@ -46,3 +47,17 @@ test/config.js
 
 # Ignore IntelliJ files
 .idea
+
+# Ignore npm-debug
+npm-debug.log
+
+# Ignore dist folder, build for bower
+dist/
+
+# Ignore flow output directory
+out/
+
+# Ignore perf test cache
+scripts/cache
+
+eslintrc

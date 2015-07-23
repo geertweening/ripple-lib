@@ -1,6 +1,8 @@
+/*eslint-disable */
+
 var assert   = require('assert');
-var utils    = require('./testutils');
-var currency = utils.load_module('currency').Currency;
+var currency = require('ripple-lib').Currency;
+var timeUtil = require('ripple-lib').utils.time;
 
 describe('Currency', function() {
   describe('json_rewrite', function() {
@@ -16,13 +18,30 @@ describe('Currency', function() {
     });
   });
   describe('from_json', function() {
+    it('from_json().to_json() == "XRP"', function() {
+      var r = currency.from_json();
+      assert(!r.is_valid());
+      assert.strictEqual('XRP', r.to_json());
+    });
     it('from_json(NaN).to_json() == "XRP"', function() {
       var r = currency.from_json(NaN);
       assert(!r.is_valid());
       assert.strictEqual('XRP', r.to_json());
     });
+    it('from_json().to_json("") == "XRP"', function() {
+      var r = currency.from_json('');
+      assert(r.is_valid());
+      assert(r.is_native());
+      assert.strictEqual('XRP', r.to_json());
+    });
     it('from_json("XRP").to_json() == "XRP"', function() {
       var r = currency.from_json('XRP');
+      assert(r.is_valid());
+      assert(r.is_native());
+      assert.strictEqual('XRP', r.to_json());
+    });
+    it('from_json("0000000000000000000000000000000000000000").to_json() == "XRP"', function() {
+      var r = currency.from_json('0000000000000000000000000000000000000000');
       assert(r.is_valid());
       assert(r.is_native());
       assert.strictEqual('XRP', r.to_json());
@@ -34,8 +53,34 @@ describe('Currency', function() {
     });
     it('from_json("1D2").to_human()', function() {
       var r = currency.from_json("1D2");
-      assert(!r.is_valid());
-      assert.strictEqual('XRP', r.to_json());
+      assert(r.is_valid());
+      assert.strictEqual('1D2', r.to_json());
+    });
+    it('from_json("1").to_human()', function() {
+      var r = currency.from_json('1');
+      assert(r.is_valid());
+      assert.strictEqual(1, r.to_json());
+    });
+    it('from_json("#$%").to_human()', function() {
+      var r = currency.from_json('#$%');
+      assert(r.is_valid());
+      assert.strictEqual('0000000000000000000000002324250000000000', r.to_json());
+    });
+    it('from_json("XAU").to_json() hex', function() {
+      var r = currency.from_json("XAU");
+      assert.strictEqual('0000000000000000000000005841550000000000', r.to_json({force_hex: true}));
+    });
+    it('from_json("XAU (0.5%pa").to_json() hex', function() {
+      var r = currency.from_json("XAU (0.5%pa)");
+      assert.strictEqual('015841550000000041F78E0A28CBF19200000000', r.to_json({force_hex: true}));
+    });
+    it('json_rewrite("015841550000000041F78E0A28CBF19200000000").to_json() hex', function() {
+      var r = currency.json_rewrite('015841550000000041F78E0A28CBF19200000000');
+      assert.strictEqual('XAU (0.5%pa)', r);
+    });
+    it('json_rewrite("015841550000000041F78E0A28CBF19200000000") hex', function() {
+      var r = currency.json_rewrite('015841550000000041F78E0A28CBF19200000000', {force_hex: true});
+      assert.strictEqual('015841550000000041F78E0A28CBF19200000000', r);
     });
   });
 
@@ -60,6 +105,9 @@ describe('Currency', function() {
       var cur = currency.from_human('EUR (0.5361%pa)');
       assert.strictEqual(cur.to_json(), 'EUR (0.54%pa)');
       assert.strictEqual(cur.to_json({decimals:4, full_name:'Euro'}), 'EUR - Euro (0.5361%pa)');
+      assert.strictEqual(cur.to_json({decimals:void(0), full_name:'Euro'}), 'EUR - Euro (0.54%pa)');
+      assert.strictEqual(cur.to_json({decimals:undefined, full_name:'Euro'}), 'EUR - Euro (0.54%pa)');
+      assert.strictEqual(cur.to_json({decimals:'henk', full_name:'Euro'}), 'EUR - Euro (0.54%pa)');
       assert.strictEqual(cur.get_interest_percentage_at(undefined, 4), 0.5361);
     });
     it('From human "TYX - 30-Year Treasuries (1.5%pa)"', function() {
@@ -78,6 +126,16 @@ describe('Currency', function() {
       var cur = currency.from_human('INR - 30 Indian Rupees');
       assert.strictEqual(cur.to_json(), 'INR');
     });
+    it('From human "XRP"', function() {
+      var cur = currency.from_human('XRP');
+      assert.strictEqual(cur.to_json(), 'XRP');
+      assert(cur.is_native(), true);
+    });
+    it('From human "XRP - Ripples"', function() {
+      var cur = currency.from_human('XRP - Ripples');
+      assert.strictEqual(cur.to_json(), 'XRP');
+      assert(cur.is_native(), true);
+    });
 
   });
 
@@ -89,8 +147,28 @@ describe('Currency', function() {
       assert.strictEqual('XRP', currency.from_json(NaN).to_human());
     });
     it('"015841551A748AD2C1F76FF6ECB0CCCD00000000") == "015841551A748AD2C1F76FF6ECB0CCCD00000000"', function() {
-      assert.strictEqual(currency.from_json("015841551A748AD2C1F76FF6ECB0CCCD00000000").to_human(),
-                         'XAU (-0.5%pa)');
+      assert.strictEqual(currency.from_json("015841551A748AD2C1F76FF6ECB0CCCD00000000").to_human(), 'XAU (-0.5%pa)');
+    });
+    it('"015841551A748AD2C1F76FF6ECB0CCCD00000000") == "015841551A748AD2C1F76FF6ECB0CCCD00000000"', function() {
+      assert.strictEqual(currency.from_json("015841551A748AD2C1F76FF6ECB0CCCD00000000").to_human({full_name:'Gold'}), 'XAU - Gold (-0.5%pa)');
+    });
+    it('to_human interest XAU with full name, do not show interest', function() {
+      assert.strictEqual(currency.from_json("015841551A748AD2C1F76FF6ECB0CCCD00000000").to_human({full_name:'Gold', show_interest:false}), 'XAU - Gold');
+    });
+    it('to_human interest XAU with full name, show interest', function() {
+      assert.strictEqual(currency.from_json("015841551A748AD2C1F76FF6ECB0CCCD00000000").to_human({full_name:'Gold', show_interest:true}), 'XAU - Gold (-0.5%pa)');
+    });
+    it('to_human interest XAU, do show interest', function() {
+      assert.strictEqual(currency.from_json("015841551A748AD2C1F76FF6ECB0CCCD00000000").to_human({show_interest:true}), 'XAU (-0.5%pa)');
+    });
+    it('to_human interest XAU, do not show interest', function() {
+      assert.strictEqual(currency.from_json("015841551A748AD2C1F76FF6ECB0CCCD00000000").to_human({show_interest:false}), 'XAU');
+    });
+    it('to_human with full_name "USD - US Dollar show interest"', function() {
+      assert.strictEqual(currency.from_json('USD').to_human({full_name:'US Dollar', show_interest:true}), 'USD - US Dollar (0%pa)');
+    });
+    it('to_human with full_name "USD - US Dollar do not show interest"', function() {
+      assert.strictEqual(currency.from_json('USD').to_human({full_name:'US Dollar', show_interest:false}), 'USD - US Dollar');
     });
     it('to_human with full_name "USD - US Dollar"', function() {
       assert.strictEqual('USD - US Dollar', currency.from_json('USD').to_human({full_name:'US Dollar'}));
@@ -98,6 +176,15 @@ describe('Currency', function() {
     it('to_human with full_name "XRP - Ripples"', function() {
       assert.strictEqual('XRP - Ripples', currency.from_json('XRP').to_human({full_name:'Ripples'}));
     });
+    it('to_human human "TIM" without full_name', function() {
+      var cur = currency.from_json("TIM");
+      assert.strictEqual(cur.to_human(), "TIM");
+    });
+    it('to_human "TIM" with null full_name', function() {
+      var cur = currency.from_json("TIM");
+      assert.strictEqual(cur.to_human({full_name: null}), "TIM");
+    });
+
   });
 
   describe('from_hex', function() {
@@ -108,10 +195,30 @@ describe('Currency', function() {
       assert.strictEqual(cur.to_json(), cur.to_human());
     });
   });
-  describe('parse_json(currency obj)', function() {
-    assert.strictEqual('USD', new currency().parse_json(currency.from_json('USD')).to_json());
+  describe('parse_json', function() {
+    it('should parse a currency object', function() {
+      assert.strictEqual('USD', new currency().parse_json(currency.from_json('USD')).to_json());
+      assert.strictEqual('USD (0.5%pa)', new currency().parse_json(currency.from_json('USD (0.5%pa)')).to_json());
+    });
+    it('should clone for parse_json on itself', function() {
+      var cur = currency.from_json('USD');
+      var cur2 = currency.from_json(cur);
+      assert.strictEqual(cur.to_json(), cur2.to_json());
 
-    assert.strictEqual('USD (0.5%pa)', new currency().parse_json(currency.from_json('USD (0.5%pa)')).to_json());
+      cur = currency.from_hex('015841551A748AD2C1F76FF6ECB0CCCD00000000');
+      cur2 = currency.from_json(cur);
+      assert.strictEqual(cur.to_json(), cur2.to_json());
+    });
+    it('should parse json 0', function() {
+      var cur = currency.from_json(0);
+      assert.strictEqual(cur.to_json(), 'XRP');
+      assert.strictEqual(cur.get_iso(), 'XRP');
+    });
+    it('should parse json 0', function() {
+      var cur = currency.from_json('0');
+      assert.strictEqual(cur.to_json(), 'XRP');
+      assert.strictEqual(cur.get_iso(), 'XRP');
+    });
   });
 
   describe('is_valid', function() {
@@ -153,23 +260,32 @@ describe('Currency', function() {
     return +(Math.round(num + "e+"+precision)  + "e-"+precision);
   }
   describe('get_interest_at', function() {
-    it('returns demurred value for demurrage currency', function() {
+    it('should return demurred value for demurrage currency', function() {
       var cur = currency.from_json('015841551A748AD2C1F76FF6ECB0CCCD00000000');
 
       // At start, no demurrage should occur
       assert.equal(1, cur.get_interest_at(443845330));
+      assert.equal(1, precision(cur.get_interest_at(new Date(timeUtil.fromRipple(443845330))), 14));
 
       // After one year, 0.5% should have occurred
       assert.equal(0.995, precision(cur.get_interest_at(443845330 + 31536000), 14));
+      assert.equal(0.995, precision(cur.get_interest_at(new Date(timeUtil.fromRipple(443845330 + 31536000))), 14));
 
       // After one demurrage period, 1/e should have occurred
-      assert.equal(1/Math.E, cur.get_interest_at(443845330 + 6291418827.05));
+      var epsilon = 1e-14;
+      assert(Math.abs(
+        1/Math.E - cur.get_interest_at(443845330 + 6291418827.05)) < epsilon);
 
       // One year before start, it should be (roughly) 0.5% higher.
       assert.equal(1.005, precision(cur.get_interest_at(443845330 - 31536000), 4));
 
       // One demurrage period before start, rate should be e
       assert.equal(Math.E, cur.get_interest_at(443845330 - 6291418827.05));
+    });
+    it('should return 0 for currency without interest', function() {
+      var cur = currency.from_json('USD - US Dollar');
+      assert.equal(0, cur.get_interest_at(443845330));
+      assert.equal(0, cur.get_interest_at(443845330  + 31536000));
     });
   });
   describe('get_iso', function() {

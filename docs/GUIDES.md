@@ -1,26 +1,25 @@
-#`ripple-lib` Guides
+#Guides
 
 This file provides step-by-step walkthroughs for some of the most common usages of `ripple-lib`.
 
-###Guides in this document:
+###In this document
 
-1. [Connecting to the Ripple network with `Remote`](GUIDES.md#1-connecting-to-the-ripple-network-with-remote)
-2. [Using `Remote` functions and `Request` objects](GUIDES.md#2-using-remote-functions-and-request-objects)
-3. [Submitting a payment to the network](GUIDES.md#3-submitting-a-payment-to-the-network)
+1. [Connecting to the Ripple network with `Remote`](GUIDES.md#connecting-to-the-ripple-network)
+2. [Using `Remote` functions and `Request` objects](GUIDES.md#sending-rippled-API-requests)
+3. [Listening to the network](GUIDES.md#listening-to-the-network)
+4. [Submitting a payment to the network](GUIDES.md#submitting-a-payment-to-the-network)
    * [A note on transaction fees](GUIDES.md#a-note-on-transaction-fees)
-4. [Submitting a trade offer to the network](GUIDES.md#4-submitting-a-trade-offer-to-the-network)
-5. [Listening to the network](GUIDES.md#5-listening-to-the-network)
+5. [Submitting a trade offer to the network](GUIDES.md#submitting-a-trade-offer-to-the-network)
 
+###Also see
 
-###Also see:
+1. [The ripple-lib README](../README.md)
+2. [The ripple-lib API Reference](REFERENCE.md)
 
-1. [The `ripple-lib` README](../README.md)
-2. [The `ripple-lib` API Reference](REFERENCE.md)
+##Connecting to the Ripple network
 
-##1. Connecting to the Ripple network with `Remote`
-
-1. [Get `ripple-lib`](README.md#getting-ripple-lib)
-2. Load the `ripple-lib` module into a Node.js file or webpage:
+1. [Get ripple-lib](../README.md#installation)
+2. Load the ripple-lib module into a Node.js file or webpage:
   ```js
   /* Loading ripple-lib with Node.js */
   var Remote = require('ripple-lib').Remote;
@@ -30,39 +29,80 @@ This file provides step-by-step walkthroughs for some of the most common usages 
   ```
 3. Create a new `Remote` and connect to the network:
   ```js
-  var remote = new Remote({options});
 
-  remote.connect(function() {
+  var options = {
+    trace :         false,
+    trusted:        true,
+    local_signing:  true,
+    servers: [
+      { host: 's-west.ripple.com', port: 443, secure: true }
+    ]
+  };
+
+  var remote = new Remote(options);
+
+  remote.connect(function(err, res) {
     /* remote connected, use some remote functions here */
   });
   ```
   __NOTE:__ See the API Reference for available [`Remote` options](REFERENCE.md#1-remote-options)
+
 4. You're connected! Read on to see what to do now.
 
+##Generating a new Ripple Wallet
 
-##2. Using `Remote` functions and `Request` objects
+  ```js
+    var ripple = require('ripple-lib');
 
-All `Remote` functions return a `Request` object. 
+    // subscribing to a server allows for more entropy
+    var remote = new ripple.Remote({
+      servers: [
+        { host: 's1.ripple.com', port: 443, secure: true }
+      ]
+    });
 
-A `Request` is an `EventEmitter` so you can listen for success or failure events -- or, instead, you can provide a callback to the `Remote` function.
+    remote.connect(function(err, res) {
+     /* remote connected */
+    });
 
-Here is an example, using `request_server_info()`, of how `Remote` functions can be used with event listeners (the first code block) or with a callback (the second block):
+    // Wait for randomness to have been added.
+    // The entropy of the random generator is increased
+    // by random data received from a rippled
+    remote.once('random', function(err, info) {
+      var wallet = ripple.Wallet.generate();
+      console.log(wallet);
+      // { address: 'rEf4sbVobiiDGExrNj2PkNHGMA8eS6jWh3',
+      //   secret: 'shFh4a38EZpEdZxrLifEnVPAoBRce' }
+    });
+  ```
 
-+ Using a `Remote` function with `Request` event listeners:
+
+##Sending rippled API requests
+
+`Remote` contains functions for constructing a `Request` object.
+
+A `Request` is an `EventEmitter` so you can listen for success or failure events -- or, instead, you can provide a callback.
+
+Here is an example, using [requestServerInfo](https://ripple.com/wiki/JSON_Messages#server_info).
+
++ Constructing a `Request` with event listeners
 ```js
-var request = remote.request_server_info();
-request.on('success', function(res) {
+var request = remote.requestServerInfo();
+
+request.on('success', function onSuccess(res) {
   //handle success
 });
-request.on('error', function(err) {
+
+request.on('error', function onError(err) {
   //handle error
 });
-request.request(); // this triggers the request if it has not already been sent to the server
+
+request.request();
 ```
 
-+ Using a `Remote` function with a callback:
++ Using a callback:
 ```js
-remote.request_server_info(function(err, res) {
+remote.request('server_info', function(err, res) {
   if (err) {
     //handle error
   } else {
@@ -74,14 +114,69 @@ remote.request_server_info(function(err, res) {
 __NOTE:__ See the API Reference for available [`Remote` functions](REFERENCE.md#2-remote-functions)
 
 
+##Listening to the network
 
-
-##3. Submitting a payment to the network
-
-Submitting a payment transaction to the Ripple network involves connecting to a `Remote`, creating a transaction, signing it with the user's secret, and submitting it to the `rippled` server. Note that the `Amount` module is used to convert human-readable amounts like '1XRP' or '10.50USD' to the type of Amount object used by the Ripple network.
+See the [wiki](https://ripple.com/wiki/JSON_Messages#subscribe) for details on subscription requests.
 
 ```js
-/* Loading ripple-lib Remote and Amount modules in Node.js */ 
+ /* Loading ripple-lib with Node.js */
+  var Remote = require('ripple-lib').Remote;
+
+  /* Loading ripple-lib in a webpage */
+  // var Remote = ripple.Remote;
+
+  var remote = new Remote({options});
+
+  remote.connect(function() {
+    var remote = new Remote({
+      // see the API Reference for available options
+      servers: [ 'wss://s1.ripple.com:443' ]
+    });
+
+    remote.connect(function() {
+      console.log('Remote connected');
+
+      var streams = [
+        'ledger',
+        'transactions'
+      ];
+
+      var request = remote.requestSubscribe(streams);
+
+      request.on('error', function(error) {
+        console.log('request error: ', error);
+      });
+
+
+      // the `ledger_closed` and `transaction` will come in on the remote
+      // since the request for subscribe is finalized after the success return
+      // the streaming events will still come in, but not on the initial request
+      remote.on('ledger_closed', function(ledger) {
+        console.log('ledger_closed: ', JSON.stringify(ledger, null, 2));
+      });
+
+      remote.on('transaction', function(transaction) {
+        console.log('transaction: ', JSON.stringify(transaction, null, 2));
+      });
+
+      remote.on('error', function(error) {
+        console.log('remote error: ', error);
+      });
+
+      // fire the request
+      request.request();
+    });
+  });
+```
+* https://ripple.com/wiki/RPC_API#transactions_stream_messages
+* https://ripple.com/wiki/RPC_API#ledger_stream_messages
+
+##Submitting a payment to the network
+
+Submitting a payment transaction to the Ripple network involves connecting to a `Remote`, creating a transaction, signing it with the user's secret, and submitting it to the `rippled` server. Note that the `Amount` module is used to convert human-readable amounts like '1 XRP' or '10.50 USD' to the type of Amount object used by the Ripple network.
+
+```js
+/* Loading ripple-lib Remote and Amount modules in Node.js */
 var Remote = require('ripple-lib').Remote;
 var Amount = require('ripple-lib').Amount;
 
@@ -92,18 +187,16 @@ var Amount = require('ripple-lib').Amount;
 var MY_ADDRESS = 'rrrMyAddress';
 var MY_SECRET  = 'secret';
 var RECIPIENT  = 'rrrRecipient';
-var AMOUNT     = Amount.from_human('1XRP');
+var AMOUNT     = Amount.from_human('1 USD').set_issuer('rrrIssuer');
 
 var remote = new Remote({ /* Remote options */ });
 
 remote.connect(function() {
-  remote.set_secret(MY_ADDRESS, MY_SECRET);
+  remote.setSecret(MY_ADDRESS, MY_SECRET);
 
-  var transaction = remote.transaction();
-
-  transaction.payment({
-    from: MY_ADDRESS, 
-    to: RECIPIENT, 
+  var transaction = remote.createTransaction('Payment', {
+    account: MY_ADDRESS,
+    destination: RECIPIENT,
     amount: AMOUNT
   });
 
@@ -124,12 +217,12 @@ Since the fee required for a transaction may change between the time when the or
 The [`max_fee`](REFERENCE.md#1-remote-options) option can be used to avoid submitting a transaction to a server that is charging unreasonably high fees.
 
 
-##4. Submitting a trade offer to the network
+##Submitting a trade offer to the network
 
-Submitting a trade offer to the network is similar to submitting a payment transaction. Here is an example for a trade that expires in 24 hours where you are offering to sell 1 USD in exchange for 100 XRP:
+Submitting a trade offer to the network is similar to submitting a payment transaction. Here is an example offering to sell 1 USD in exchange for 100 XRP:
 
 ```js
-/* Loading ripple-lib Remote and Amount modules in Node.js */ 
+/* Loading ripple-lib Remote and Amount modules in Node.js */
 var Remote = require('ripple-lib').Remote;
 var Amount = require('ripple-lib').Amount;
 
@@ -139,27 +232,17 @@ var Amount = require('ripple-lib').Amount;
 
 var MY_ADDRESS = 'rrrMyAddress';
 var MY_SECRET  = 'secret';
-
-var BUY_AMOUNT = Amount.from_human('100XRP');
-var SELL_AMOUNT = Amount.from_human('1USD');
-
-// EXPIRATION must be a Date object, leave undefined to submit offer that won't expire
-var now = new Date();
-var tomorrow = new Date(now.getTime() + (24 * 60 * 60 * 1000));
-var EXPIRATION = tomorrow;
+var GATEWAY = 'rrrGateWay';
 
 var remote = new Remote({ /* Remote options */ });
 
 remote.connect(function() {
-  remote.set_secret(MY_ADDRESS, MY_SECRET);
+  remote.setSecret(MY_ADDRESS, MY_SECRET);
 
-  var transaction = remote.transaction();
-
-  transaction.offer_create({
-    from: MY_ADDRESS, 
-    buy: BUY_AMOUNT, 
-    sell: SELL_AMOUNT, 
-    expiration: EXPIRATION
+  var transaction = remote.createTransaction('OfferCreate', {
+    account: MY_ADDRESS,
+    taker_pays: '100',
+    taker_gets: '1/USD/' + GATEWAY
   });
 
   transaction.submit(function(err, res) {
@@ -167,35 +250,3 @@ remote.connect(function() {
   });
 });
 ```
-
-##5. Listening to the network
-
-In some (relatively rare) cases you may want to subscribe to the network event feed and listen for transactions and the ledger closings. [Ripple.com](http://www.ripple.com) uses this feature of `ripple-lib` to display the live feed on the top of each page and the ledger closing visualization on the [Developers page](http://ripple.com/devs).
-
-```js
- /* Loading ripple-lib with Node.js */
-  var Remote = require('ripple-lib').Remote;
-
-  /* Loading ripple-lib in a webpage */
-  // var Remote = ripple.Remote;
-
-  var remote = new Remote({options});
-
-  remote.connect(function() {
-    remote.on('transaction_all', transactionListener);
-    remote.on('ledger_closed', ledgerListener);
-  });
-
-  function transactionListener (transaction_data) {
-    // handle transaction_data
-    // see https://ripple.com/wiki/RPC_API#transactions_stream_messages for the format of transaction_data
-  }
-
-  function ledgerListener (ledger_data) {
-    // handle ledger_data
-    // see https://ripple.com/wiki/RPC_API#ledger_stream_messages for the format of ledger_data
-  }
-```
-* https://ripple.com/wiki/RPC_API#transactions_stream_messages
-* https://ripple.com/wiki/RPC_API#ledger_stream_messages
-
